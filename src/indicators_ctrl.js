@@ -39,7 +39,7 @@ export class IndicatorsCtrl {
       }
       var bars = $scope.override.bars;
       if (_.isUndefined(lines)) {
-        bras = defMode === 'bars';
+        bars = defMode === 'bars';
       }
       var points = $scope.override.points;
       if (_.isUndefined(lines)) {

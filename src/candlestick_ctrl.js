@@ -134,9 +134,27 @@ export class CandleStickCtrl extends MetricsPanelCtrl {
   }
 
   onDataReceived(dataList) {
-    this.series = dataList.map((item, index) => {
-      return this.seriesHandler(item, index);
-    });
+    let series = [];
+    for (const list of dataList) {
+      if (list.hasOwnProperty('columns')) {
+        for (let index = 0; index < list.columns.length; index++) {
+          if (list.columns[index].text === 'Time') {
+            continue;
+          }
+          series.push(this.seriesHandler(list, index));
+        }
+      } else {
+        let indicatorSeries = new TimeSeries({
+          datapoints: list.datapoints.map(item => {
+            return [item[0], item[1]];
+          }),
+          alias: list.target
+        });
+        indicatorSeries.flotpairs = indicatorSeries.getFlotPairs(this.panel.nullPointMode);
+        series.push(indicatorSeries);
+      }
+    }
+    this.series = series;
     this.refreshColors();
     this.data = this.parseSeries(this.series);
     this.render(this.data);
@@ -144,8 +162,10 @@ export class CandleStickCtrl extends MetricsPanelCtrl {
 
   seriesHandler(seriesData, index) {
     let series = new TimeSeries({
-      datapoints: seriesData.datapoints,
-      alias: seriesData.target,
+      datapoints: seriesData.rows.map(item => {
+        return [item[index], item[0]];
+      }),
+      alias: seriesData.columns[index].text,
     });
 
     series.flotpairs = series.getFlotPairs(this.panel.nullPointMode);
