@@ -5,12 +5,17 @@ import 'jquery.flot';
 import { appEvents } from 'app/core/core';
 import './vendor/jquery_flot_candlestick';
 import './vendor/jquery_flot_axislabels';
+import {
+  LegacyGraphHoverClearEvent,
+  LegacyGraphHoverEvent,
+} from '@grafana/data';
 
 export default function link(scope, elem, attrs, ctrl) {
   var data, panel, dashboard, plot;
   elem = elem.find('.candlestick-panel');
   var $tooltip = $('<div class="graph-tooltip">');
   var grayColor = '#c8c9ca';
+  const hoverEvent = new LegacyGraphHoverEvent({ pos: {}, point: {}, panel: panel });
 
   ctrl.events.on('render', renderData => {
     data = renderData || data;
@@ -42,35 +47,33 @@ export default function link(scope, elem, attrs, ctrl) {
       clearTooltip();
     }
     appEvents.emit('graph-hover-clear');
+    dashboard.events.publish(new LegacyGraphHoverClearEvent());
   });
 
-  appEvents.on(
-    'graph-hover',
-    evt => {
-      // ignore other graph hover events if shared tooltip is disabled
-      if (!dashboard || !dashboard.sharedTooltipModeEnabled()) {
-        return;
-      }
+  appEvents.on('graph-hover', onGraphHover.bind(this), scope);
+  appEvents.on('graph-hover-clear', onGraphHoverClear.bind(this), scope);
+  ctrl.dashboard.events.on(LegacyGraphHoverEvent.type, onGraphHover.bind(this), scope);
+  ctrl.dashboard.events.on(LegacyGraphHoverClearEvent.type, onGraphHoverClear.bind(this), scope);
 
-      // ignore if we are the emitter
-      if (!plot || evt.panel.id === panel.id || ctrl.otherPanelInFullscreenMode()) {
-        return;
-      }
+  function onGraphHoverClear(event, info) {
+    if (plot) {
+      clearTooltip();
+    }
+  }
 
-      showToolpit(evt.pos);
-    },
-    scope
-  );
+  function onGraphHover(evt) {
+    // ignore other graph hover events if shared tooltip is disabled
+    if (!dashboard || !dashboard.sharedTooltipModeEnabled()) {
+      return;
+    }
 
-  appEvents.on(
-    'graph-hover-clear',
-    (event, info) => {
-      if (plot) {
-        clearTooltip();
-      }
-    },
-    scope
-  );
+    // ignore if we are the emitter
+    if (!plot || evt.panel.id === panel.id || ctrl.otherPanelInFullscreenMode()) {
+      return;
+    }
+
+    showToolpit(evt.pos);
+  }
 
   function setElementHeight() {
     try {
@@ -351,7 +354,10 @@ export default function link(scope, elem, attrs, ctrl) {
 
       // broadcast to other graph panels that we are hovering!
       pos.panelRelY = (pos.pageY - elem.offset().top) / elem.height();
-      appEvents.emit('graph-hover', {pos: pos, panel: panel});
+      hoverEvent.payload.pos = pos;
+      hoverEvent.payload.panel = panel;
+      hoverEvent.payload.point.time = pos.x;
+      dashboard.events.publish(hoverEvent);
     });
   }
 
